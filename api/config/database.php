@@ -20,4 +20,5 @@ echo "Connection error: " . $exception->getMessage();
 return $this->conn;
 }
 }
+echo "Database connection file loaded successfully.";
 ?>
