@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meme Central - prototype version</title>
+<!-- Bootstrap 5 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+rel="stylesheet">
+<!-- Font Awesome for icons (optional) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font￾awesome/6.0.0/css/all.min.css">
+<style>
+/* Pinterest-style masonry grid using CSS columns */
+.masonry-grid {
+column-count: 4; /* number of columns */
+column-gap: 1.5rem;
+width: 100%;
+}
+.masonry-item {
+break-inside: avoid; /* prevent items from splitting across columns */
+margin-bottom: 1.5rem;
+display: inline-block;
+width: 100%;
+}
+.card {
+border: none;
+border-radius: 16px;
+overflow: hidden;
+box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+transition: transform 0.2s ease, box-shadow 0.2s ease;
+background: #fff;
+}
+.card:hover {
+transform: translateY(-4px);
+box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.gallery-img {
+width: 100%;
+height: auto; /* natural height */
+display: block;
+cursor: pointer;
+}
+.delete-btn {
+position: absolute;
+top: 10px;
+right: 10px;
+z-index: 10;
+background: rgba(255,255,255,0.9);
+border: none;
+border-radius: 50%;
+width: 36px;
+height: 36px;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 1.2rem;
+color: #dc3545;
+cursor: pointer;
+transition: background 0.2s, transform 0.2s;
+box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+.delete-btn:hover {
+background: #dc3545;
+color: white;
+transform: scale(1.1);
+}
+.card-body {
+padding: 0.75rem;
+background: #fff;
+}
+.card-text {
+margin: 0;
+font-size: 0.9rem;
+color: #495057;
+font-weight: 500;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+/* Modal image */
+#modalImage {
+max-width: 100%;
+max-height: 70vh;
+object-fit: contain;
+}
+/* Responsive column counts */
+@media (max-width: 1200px) {
+.masonry-grid { column-count: 3; }
+}
+@media (max-width: 992px) {
+.masonry-grid { column-count: 2; }
+}
+@media (max-width: 576px) {
+.masonry-grid { column-count: 1; }
+}
+</style>
+</head>
+<body>
+<div class="container mt-5">
+<h1 class="mb-4 text-center">
+<i class="fas fa-dragon me-2"></i>MemeCentral
+</h1>
+<!-- Upload Form (unchanged) -->
+<div class="card mb-4 shadow-sm">
+<div class="card-body">
+<form id="uploadForm" enctype="multipart/form-data">
+<div class="mb-3">
+<label for="imageInput" class="form-label">
+<i class="fas fa-cloud-upload-alt me-2"></i>Choose Image
+</label>
+<input class="form-control" type="file" id="imageInput" name="image" 
+accept="image/png, image/jpeg, image/gif, image/webp" required>
+</div>
+<button type="submit" class="btn btn-primary">
+<i class="fas fa-upload me-2"></i>Upload
+</button>
+</form>
+<div id="uploadMessage" class="mt-2"></div>
+</div>
+</div>
+<!-- Gallery Grid - now using masonry-grid class -->
+<div id="gallery" class="masonry-grid"></div>
+</div>
+<!-- Modal for image preview -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" ariahidden="true">
+<div class="modal-dialog modal-lg modal-dialog-centered">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal" arialabel="Close"></button>
+</div>
+<div class="modal-body text-center">
+<img src="" id="modalImage" class="img-fluid" alt="Preview">
+</div>
+<div class="modal-footer">
+<a href="#" id="downloadBtn" class="btn btn-success" download>
+<i class="fas fa-download me-2"></i>Download
+</a>
+<button type="button" id="modalDeleteBtn" class="btn btn-danger">
+<i class="fas fa-trash me-2"></i>Delete
+</button>
+<button type="button" class="btn btn-secondary" data-bsdismiss="modal">Close</button>
+</div>
+</div>
+</div>
+</div>
+<script 
+src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const API_BASE = 'http://127.0.0.1:8080/stash_web/api/index.php';
+// Update this if your images are served from a different base path
+const IMAGES_BASE = '../'; // because filepath already includes 'uploads/...'
+let imageModal; // Bootstrap modal instance
+let currentImageId = null; // ID of image shown in modal
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+fetchImages();
+imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+
+// Modal delete button handler
+document.getElementById('modalDeleteBtn').addEventListener('click', handleModalDelete);
+});
+
+// Upload form handler (unchanged, but with better error message)
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+e.preventDefault();
+const formData = new FormData();
+const fileInput = document.getElementById('imageInput');
+formData.append('image', fileInput.files[0]);
+const msgDiv = document.getElementById('uploadMessage');
+msgDiv.innerHTML = '<div class="alert alert-info">Uploading...</div>';
+try {
+const response = await fetch(`${API_BASE}/upload`, {
+method: 'POST',
+body: formData
+});
+const result = await response.json();
+if (response.ok) {
+msgDiv.innerHTML = '<div class="alert alert-success">✓ Upload successful!</div>';
+fileInput.value = '';
+fetchImages();
+} else {
+msgDiv.innerHTML = `<div class="alert alert-danger"> ${result.message || 'Upload failed.'}</div>`;
+}
+} catch (error) {
+msgDiv.innerHTML = '<div class="alert alert-danger"> Network error.</div>';
+console.error(error);
+}
+});
+// Fetch images from API
+async function fetchImages() {
+try {
+const response = await fetch(`${API_BASE}/images`);
+const images = await response.json();
+renderGallery(images);
+} catch (error) {
+console.error('Failed to fetch images:', error);
+document.getElementById('gallery').innerHTML = '<p class="text-center text-muted">Failed to load gallery.</p>';
+}
+}
+// Render images in masonry grid
+function renderGallery(images) {
+const gallery = document.getElementById('gallery');
+gallery.innerHTML = '';
+if (!images.length) {
+gallery.innerHTML = '<p class="text-center text-muted"> No images yet. Upload something!</p>';
+return;
+}
+images.forEach(img => {
+// Construct full image URL: IMAGES_BASE (which goes up one level) + img.filepath (e.g., 'uploads/abc.jpg')
+const fullImageUrl = IMAGES_BASE + img.filepath;
+const item = document.createElement('div');
+item.className = 'masonry-item';
+item.innerHTML = `
+<div class="card position-relative">
+<img src="${fullImageUrl}" class="gallery-img" alt="${img.filename}" data-id="${img.id}" 
+data-filename="${img.filename}">
+<button class="delete-btn" data-id="${img.id}"><i class="fas fa-trash"></i></button>
+<div class="card-body">
+<p class="card-text">${img.filename}</p>
+</div>
+</div>
+`;
+gallery.appendChild(item);
+});
+// Attach click listeners to images (open modal)
+document.querySelectorAll('.gallery-img').forEach(img => {
+img.addEventListener('click', (e) => {
+const imageUrl = e.currentTarget.src;
+const filename = e.currentTarget.dataset.filename;
+const imageId = e.currentTarget.dataset.id;
+if (!imageId) return alert('Error: Image ID missing.');
+openModal(imageUrl, filename, imageId);
+});
+});
+// Attach delete listeners to buttons (using currentTarget to avoid issues)
+document.querySelectorAll('.delete-btn').forEach(btn => {
+btn.addEventListener('click', async (e) => {
+e.stopPropagation(); // prevent triggering image click
+const id = e.currentTarget.dataset.id;
+if (!confirm('Delete this image?')) return;
+try {
+const response = await fetch(`${API_BASE}/images/${id}`, {
+method: 'DELETE'
+});
+const result = await response.json();
+if (response.ok) {
+fetchImages(); // refresh
+} else {
+alert(result.message || 'Delete failed.');
+}
+} catch (error) {
+alert('Network error while deleting.');
+console.error(error);
+}
+});
+});
+}
+// Open modal with image and set currentImageId
+function openModal(imageUrl, filename, imageId) {
+document.getElementById('modalImage').src = imageUrl;
+document.getElementById('downloadBtn').href = imageUrl;
+document.getElementById('downloadBtn').download = filename;
+currentImageId = imageId;
+imageModal.show();
+}
+// Modal delete handler
+async function handleModalDelete() {
+if (!currentImageId) return alert('No image selected.');
+if (!confirm('Delete this image?')) return;
+const btn = document.getElementById('modalDeleteBtn');
+btn.disabled = true;
+btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
+try {
+const response = await fetch(`${API_BASE}/images/${currentImageId}`, {
+method: 'DELETE'
+});
+const result = await response.json();
+if (response.ok) {
+imageModal.hide();
+fetchImages();
+} else {
+alert(result.message || 'Delete failed.');
+}
+} catch (error) {
+alert('Network error while deleting.');
+console.error(error);
+} finally {
+btn.disabled = false;
+btn.innerHTML = '<i class="fas fa-trash me-2"></i>Delete';
+}
+}
+</script>
+</body>
+</html>
