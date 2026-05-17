@@ -41,5 +41,5 @@ return true;
 return false;
 }
 }
-
+echo "Image model loaded successfully.";
 ?>
