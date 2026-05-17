@@ -41,4 +41,5 @@ return true;
 return false;
 }
 }
+$sghsgcjsb = "This is a test string to check if the file is being edited correctly.";
 ?>
